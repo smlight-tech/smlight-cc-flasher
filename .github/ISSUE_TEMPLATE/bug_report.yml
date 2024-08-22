@@ -1,0 +1,70 @@
+---
+# yamllint disable rule:line-length
+name: Bug Report Form
+description: Report an issue related to smlight-cc-flasher.
+body:
+
+  - type: textarea
+    validations:
+      required: true
+    attributes:
+      label: Describe the issue you are experiencing
+      description: Provide a clear and concise description of what the bug is.
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Details
+
+  - type: textarea
+    validations:
+      required: true
+    attributes:
+      label: Device you are flashing
+      description: Provide details of the device you are having issues flashing.
+    
+  - type: dropdown
+    validations:
+      required: true
+    attributes:
+      label: Which operating system are you running on?
+      options:
+        - Linux
+        - MacOS
+        - Windows
+        - Home Assistant Operating System
+        - Other
+
+  - type: markdown
+    attributes:
+      value: |
+        # Details
+
+  - type: textarea
+    validations:
+      required: true
+    attributes:
+      label: Steps to reproduce the issue
+      description: |
+        Please tell us exactly how to reproduce your issue.
+        Provide clear and concise step by step instructions and add code snippets if needed.
+      value: |
+        1.
+        2.
+        3.
+        ...
+
+  - type: textarea
+    attributes:
+      label: Anything in the logs that might be useful for us?
+      description: >
+        Copy any logs displaying errors related to your issue, you can use the `-V` flag to get more detailed logs.
+      render: txt
+
+  - type: textarea
+    attributes:
+      label: Additional information
+      description: >
+        If you have any additional information for us, use the field below.
+        Please note, you can attach screenshots or screen recordings here, by
+        dragging and dropping files in the field below.
