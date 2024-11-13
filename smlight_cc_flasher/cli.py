@@ -54,7 +54,7 @@ class CLI:
 
     def validate_device(self, value):
         windows_pattern = r"^COM\d+$"
-        linux_pattern = r"^/dev/tty(USB|ACM)\d+$"
+        linux_pattern = r"^/dev/tty(USB|ACM|S)\d+$"
         macos_pattern = r"^/dev/tty\.(usbserial|usbmodem)[A-Za-z0-9.-]+$"
         socket_pattern = r"^socket://[A-Za-z0-9.-]+:\d+$"
 
