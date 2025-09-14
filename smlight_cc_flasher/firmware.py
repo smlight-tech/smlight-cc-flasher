@@ -69,7 +69,7 @@ class FirmwareFile:
         else:
             return
 
-        if file_type == "text/plain":
+        if file_type == "text/plain" or file_type == "text/x-hex":
             _LOGGER.info("Firmware file: Intel Hex")
 
             fobj = StringIO(bytearray(buffer).decode()) if buffer else path
