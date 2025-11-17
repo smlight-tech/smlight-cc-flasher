@@ -144,12 +144,13 @@ class Bootloader:
 
 
 class CommandInterface:
-    ACK = b"\x00\xCC"
+    ACK = b"\x00\xcc"
     NACK = b"\x00\x33"
 
     async def open(self, aport=None, abaudrate=500000):
         self.reader, self.writer = await serial_asyncio.open_serial_connection(
-            url=aport, baudrate=abaudrate  # , timeout=1
+            url=aport,
+            baudrate=abaudrate,  # , timeout=1
         )
         self.webserial = hasattr(self.writer.transport.serial, "webserial")
         _LOGGER.info("Opened port %s, baud %d", aport, abaudrate)
@@ -206,7 +207,7 @@ class CommandInterface:
         buffer_size = 0
         if not self.webserial:
             buffer_size = self.writer.transport.get_write_buffer_size()
-        assert isinstance(data, (bytes, bytearray)), "Bad data type"
+        assert isinstance(data, bytes | bytearray), "Bad data type"
         _LOGGER.debug("*** Wrote %d/%d bytes", buffer_size, length)
 
     async def _sendCmd(
@@ -376,7 +377,7 @@ class CommandInterface:
     async def cmdSendData(self, data):
         cmd = COMMAND.SEND_DATA
         # data = bytearray(data)
-        assert isinstance(data, (bytes, bytearray)), "Bad data type"
+        assert isinstance(data, bytes | bytearray), "Bad data type"
         return await self._processCmd(cmd, data=data)
 
     async def cmdMemRead(self, addr):

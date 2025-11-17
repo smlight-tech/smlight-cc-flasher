@@ -165,7 +165,7 @@ class CLI:
             self.parser.error("Verify after read not implemented.")
 
         if args.len < 0:
-            self.parser.error("Length must be positive but %d was provided" % args.len)
+            self.parser.error(f"Length must be positive but {args.len} was provided")
 
         if args.V:
             self.config_logging("DEBUG")
@@ -192,7 +192,7 @@ class CLI:
             "tty.usbmodem",
             "tty.SLAB_USBtoUART",
         ]:
-            ports.extend(glob.glob("/dev/%s*" % name))
+            ports.extend(glob.glob(f"/dev/{name}*"))
 
         ports = sorted(ports)
 

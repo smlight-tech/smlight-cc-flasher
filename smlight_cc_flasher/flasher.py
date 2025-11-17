@@ -1,10 +1,11 @@
 # Copyright (c) 2024, SMLIGHT <smartlight.email@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
 
-""" Flasher class for api use via cc-web-tools or HA"""
+"""Flasher class for api use via cc-web-tools or HA"""
 
+from collections.abc import Callable
 import logging
-from typing import Any, Callable, Optional
+from typing import Any
 
 from .command import Bootloader, CommandInterface
 from .device import CC26xx
@@ -49,9 +50,7 @@ class Flasher:
     def set_firmware(self, file):
         self.chip.set_firmware(file)
 
-    async def flash(
-        self, progress_callback: Optional[Callable[[int, int], Any]] = None
-    ):
+    async def flash(self, progress_callback: Callable[[int, int], Any] | None = None):
         await self.chip.erase()
         await self.chip.flash(progress_callback=progress_callback)
         await self.chip.verify()

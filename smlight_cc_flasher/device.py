@@ -125,9 +125,7 @@ class CC26xx(Chip):
 
         # We can now detect the exact device
         _LOGGER.info(
-            "pg_rev = {:0x}, protocols = {:0x}, wafer_id = 0x{:04x}".format(
-                pg_rev, protocols, wafer_id
-            ),
+            f"pg_rev = {pg_rev:0x}, protocols = {protocols:0x}, wafer_id = 0x{wafer_id:04x}",
         )
 
         if wafer_id == 0xB99A:  # CC26x0
@@ -211,7 +209,7 @@ class CC26xx(Chip):
             elif pg == 0x0B:
                 # HW revision R2, update Chip name
                 chip_str += "R2"
-                pg_str = "PG%d.%d" % (1 + (rev_minor // 10), rev_minor % 10)
+                pg_str = f"PG{1 + (rev_minor // 10)}.{rev_minor % 10}"
 
         return f"{chip_str} {pg_str}"
 
@@ -328,15 +326,13 @@ class CC26xx(Chip):
             for i in range(0, length >> 2):
                 # reading 4 bytes at a time
                 rdata = await self.read_memory(self.flash_start_addr + (i * 4))
-                _LOGGER.debug(
-                    " 0x%x: 0x%02x%02x%02x%02x"
-                    % (
-                        self.flash_start_addr + (i * 4),
-                        rdata[0],
-                        rdata[1],
-                        rdata[2],
-                        rdata[3],
-                    )
+                _LOGGER.debug(  # noqa: UP031
+                    " 0x%x: 0x%02x%02x%02x%02x",
+                    self.flash_start_addr + (i * 4),
+                    rdata[0],
+                    rdata[1],
+                    rdata[2],
+                    rdata[3],
                 )
                 f.write(rdata)
 
@@ -364,6 +360,6 @@ class CC26xx(Chip):
             else:
                 await self.command_interface.cmdReset()
                 raise Exception(
-                    "NO CRC32 match: Local = 0x{:x}, "
-                    "Target = 0x{:x}".format(crc_local, crc_target)
+                    f"NO CRC32 match: Local = 0x{crc_local:x}, "
+                    f"Target = 0x{crc_target:x}"
                 )
