@@ -32,7 +32,7 @@ dependencies = [
 	"tqdm~=4.67.0",
 ]
 
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 [project.scripts]
 smlight_cc_flasher = "smlight_cc_flasher.__main__:main"
