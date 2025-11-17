@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from io import StringIO
 import logging
 import struct
-from typing import Any, List
+from typing import Any
 
 from intelhex import IntelHex
 import magic
@@ -57,7 +57,7 @@ class FirmwareFile:
             device
         """
         self._crc32: int | None = None
-        self.segments: List[Any] = []
+        self.segments: list[Any] = []
         self.ih: IntelHex
         self.size: int = 0
         file_type = None
@@ -132,7 +132,7 @@ class FirmwareFile:
             True if the bootloader backdoor is enabled, False otherwise
         """
         data = self.segments[-1].bytes[offset : offset + 4]
-        _LOGGER.debug("BL_CONFIG: 0x%08x" % struct.unpack("<I", data)[0])
+        _LOGGER.debug("BL_CONFIG: 0x%08x", struct.unpack("<I", data)[0])  # noqa: UP031
 
         bl_enabled = data[0] == 0xC5 and data[3] == 0xC5
         bl_pin = data[1]

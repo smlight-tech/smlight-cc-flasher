@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import Enum
-from typing import Dict
 
 
 class COMMAND(Enum):
@@ -36,7 +35,7 @@ COMMAND_STRS = {
 
 COMMAND_HAS_DATA: list[int] = [0x23, 0x27, 0x28, 0x2A]
 
-RETURN_CMD_STRS: Dict[int, str] = {
+RETURN_CMD_STRS: dict[int, str] = {
     0x40: "Success",
     0x41: "Unknown command",
     0x42: "Invalid command",
