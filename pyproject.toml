@@ -60,14 +60,32 @@ testing = [
 ]
 
 [tool.ruff]
+line-length = 88
+target-version = "py310"
+src = ["smlight_cc_flasher", "tests"]
+
+[tool.ruff.lint]
 select = [
 		# Pyflakes
 		"F",
 		# Pycodestyle
 		"E",
-		"W"
+		"W",
+		# isort
+		"I",
+		# pyupgrade
+		"UP",
+		# Remove unused imports/variables
+		"F401",
+		"F841",
 ]
-src = ["smlight_cc_flasher", "tests"]
+ignore = ["E203", "E501"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["smlight_cc_flasher", "tests"]
+forced-separate = ["tests"]
+combine-as-imports = true
 
 [tool.pytest.ini_options]
 addopts = "--showlocals --verbose"
