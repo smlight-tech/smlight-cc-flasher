@@ -1,3 +1,4 @@
-from pathlib import Path
-
-__version__ = Path(__file__).parent.joinpath("VERSION").read_text()
+try:
+    from ._version import __version__
+except ImportError:
+    __version__ = "0.0.0+unknown"
