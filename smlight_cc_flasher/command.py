@@ -112,23 +112,23 @@ class Bootloader:
         self._inverted = inverted
 
     async def invoke_bootloader(self):
-        if not ("socket" in self._device or self._smlight_net):
-            if self._gpio:
-                await self.invoke_gpio()
-            else:
-                if self._inverted:
-                    self.set_bootloader_pin = PinSetter(self._serial, "rts")
-                    self.set_reset_pin = PinSetter(self._serial, "dtr")
-                else:
-                    self.set_bootloader_pin = PinSetter(self._serial, "dtr")
-                    self.set_reset_pin = PinSetter(self._serial, "rts")
-
-                if self._generic2:
-                    await self.invoke_generic2()
-                else:
-                    await self.invoke_generic()
-        else:
+        if self._smlight_net or "socket" in self._device:
             await self.invoke_smlight_net(self._host)
+        elif self._gpio:
+            await self.invoke_gpio()
+        else:
+            # Set up serial pins for DTR/RTS control
+            if self._inverted:
+                self.set_bootloader_pin = PinSetter(self._serial, "rts")
+                self.set_reset_pin = PinSetter(self._serial, "dtr")
+            else:
+                self.set_bootloader_pin = PinSetter(self._serial, "dtr")
+                self.set_reset_pin = PinSetter(self._serial, "rts")
+
+            if self._generic2:
+                await self.invoke_generic2()
+            else:
+                await self.invoke_generic()
 
         await asyncio.sleep(0.1)
 
