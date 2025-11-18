@@ -5,6 +5,7 @@ from asyncio.exceptions import TimeoutError
 import logging
 import math
 import struct
+from typing import Any
 
 from .command import CommandInterface
 from .exceptions import DeviceException
@@ -14,30 +15,31 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class Chip:
-    def __init__(self, command_interface, m33=False):
+    def __init__(self, command_interface: CommandInterface, m33: bool = False) -> None:
         self.command_interface = command_interface
 
         self.flash_start_addr = 0x00000000
         self.bootloader_dis_val = 0xFFFFFFC5
+        self.bootloader_address = 0
         self.page_size = 2048
         self.m33 = m33
 
-    def page_align_up(self, value):
+    def page_align_up(self, value: int) -> int:
         return int(math.ceil(value / self.page_size) * self.page_size)
 
-    def page_align_down(self, value):
+    def page_align_down(self, value: int) -> int:
         return int(math.floor(value / self.page_size) * self.page_size)
 
-    def page_to_addr(self, pages):
+    def page_to_addr(self, pages: list[int]) -> list[int]:
         addresses = []
         for page in pages:
             addresses.append(int(self.flash_start_addr) + int(page) * self.page_size)
         return addresses
 
-    def set_flash_start_addr(self, addr):
+    def set_flash_start_addr(self, addr: int) -> None:
         self.flash_start_addr = addr
 
-    def disable_bootloader(self, force):
+    def disable_bootloader(self, force: bool) -> None:
         if not force:
             error_str = (
                 "Disabling the bootloader will prevent you from "
@@ -61,15 +63,20 @@ class CC26xx(Chip):
     PROTO_MASK_IEEE = 0x04
     PROTO_MASK_BOTH = 0x05
 
+    _firmware: FirmwareFile
+    addr_ieee_address_secondary: int
+    size: int
+    misc_conf_1_offset: int
+
     def __init__(
         self,
         command_interface: CommandInterface,
         firmware: FirmwareFile | None = None,
         m33: bool = False,
-    ):
+    ) -> None:
         super().__init__(command_interface, m33)
         if firmware:
-            self._firmware: FirmwareFile = firmware
+            self._firmware = firmware
 
         if self.m33:
             self.FCFG_BASE = 0x50000800  # P10
@@ -86,10 +93,16 @@ class CC26xx(Chip):
             self.CCFG_START = 0x1FA8
             self.FLASH_BASE = 0x40030000
 
-    def set_firmware(self, file: FirmwareFile):
+    def set_firmware(self, file: FirmwareFile) -> None:
         self._firmware = file
 
-    async def async_init(self):
+    async def _read_bytes(self, addr: int) -> bytes:
+        """Read memory and assert the result is bytes."""
+        result = await self.command_interface.cmdMemRead(addr)
+        assert isinstance(result, bytes), "Expected bytes from cmdMemRead"
+        return result
+
+    async def async_init(self) -> None:
         fcfg_user_id_offset = 0x294
         fcfg_icepick_id_offset = 0x318
         flash_size_offset = 0x2C
@@ -100,18 +113,14 @@ class CC26xx(Chip):
 
         # Determine CC13xx vs CC26xx via ICEPICK_DEVICE_ID::WAFER_ID and store
         # PG revision
-        device_id = await self.command_interface.cmdMemRead(
-            self.FCFG_BASE + fcfg_icepick_id_offset
-        )
+        device_id = await self._read_bytes(self.FCFG_BASE + fcfg_icepick_id_offset)
         wafer_id = (
             ((device_id[3] & 0x0F) << 16) + (device_id[2] << 8) + (device_id[1] & 0xF0)
         ) >> 4
         pg_rev = (device_id[3] & 0xF0) >> 4
 
         # Read FCFG1_USER_ID to get the package and supported protocols
-        user_id = await self.command_interface.cmdMemRead(
-            self.FCFG_BASE + fcfg_user_id_offset
-        )
+        user_id = await self._read_bytes(self.FCFG_BASE + fcfg_user_id_offset)
         package = {
             0x00: "4x4mm",
             0x01: "5x5mm",
@@ -144,9 +153,7 @@ class CC26xx(Chip):
         else:
             raise DeviceException("Unknown wafer_id: 0x%04x", wafer_id)
 
-        flash_size = await self.command_interface.cmdMemRead(
-            self.FLASH_BASE + flash_size_offset
-        )
+        flash_size = await self._read_bytes(self.FLASH_BASE + flash_size_offset)
         if self.m33:
             self.size = (
                 (((flash_size[1] & 0x03) << 1) + ((flash_size[0] & 0x80) >> 7))
@@ -162,11 +169,11 @@ class CC26xx(Chip):
         )
 
         # Primary IEEE address. Stored with the MSB at the high address
-        ieee_addr = await self.command_interface.cmdMemRead(
+        ieee_addr = await self._read_bytes(
             self.FCFG_BASE + ieee_address_primary_offset + 4
         )
         ieee_addr = ieee_addr[::-1]
-        ieee_addr2 = await self.command_interface.cmdMemRead(
+        ieee_addr2 = await self._read_bytes(
             self.FCFG_BASE + ieee_address_primary_offset
         )
         ieee_addr += ieee_addr2[::-1]
@@ -179,7 +186,7 @@ class CC26xx(Chip):
             "Primary IEEE Address: %s", ":".join(f"{x:02x}" for x in ieee_addr)
         )
 
-    async def _identify_cc26xx(self, pg, protocols):
+    async def _identify_cc26xx(self, pg: int, protocols: int) -> str:
         chips_dict = {
             CC26xx.PROTO_MASK_IEEE: "CC2630",
             CC26xx.PROTO_MASK_BLE: "CC2640",
@@ -196,42 +203,38 @@ class CC26xx(Chip):
             pg_str = "PG2.1"
         elif pg == 8 or pg == 0x0B:
             # CC26x0 PG2.2+ or CC26x0R2
-            rev_minor = await self.command_interface.cmdMemRead(
-                self.FCFG_BASE + self.misc_conf_1_offset
-            )
-            rev_minor = rev_minor[0]
-            if rev_minor == 0xFF:
-                rev_minor = 0x00
+            rev_minor = await self._read_bytes(self.FCFG_BASE + self.misc_conf_1_offset)
+            rev_minor_int = rev_minor[0]
+            if rev_minor_int == 0xFF:
+                rev_minor_int = 0x00
 
             if pg == 8:
                 # CC26x0
-                pg_str = f"PG2.{(2 + rev_minor):d}"
+                pg_str = f"PG2.{(2 + rev_minor_int):d}"
             elif pg == 0x0B:
                 # HW revision R2, update Chip name
                 chip_str += "R2"
-                pg_str = f"PG{1 + (rev_minor // 10)}.{rev_minor % 10}"
+                pg_str = f"PG{1 + (rev_minor_int // 10)}.{rev_minor_int % 10}"
 
         return f"{chip_str} {pg_str}"
 
-    async def _identify_cc2674(self, pg):
+    async def _identify_cc2674(self, pg: int) -> str:
         chip_str = "CC2674"
         if pg == 0:
             pg_str = "PG1"
         elif pg == 1:
             pg_str = "PG2"
 
-        rev_minor = await self.command_interface.cmdMemRead(
-            self.FCFG_BASE + self.misc_conf_1_offset
-        )
-        rev_minor = rev_minor[0]
-        if rev_minor == 0xFF:
-            rev_minor = 0x00
+        rev_minor = await self._read_bytes(self.FCFG_BASE + self.misc_conf_1_offset)
+        rev_minor_int = rev_minor[0]
+        if rev_minor_int == 0xFF:
+            rev_minor_int = 0x00
 
-        pg_str = f"{pg_str}.{rev_minor:d}"
+        pg_str = f"{pg_str}.{rev_minor_int:d}"
 
         return f"{chip_str} {pg_str}"
 
-    async def _identify_cc13xx(self, pg, protocols):
+    async def _identify_cc13xx(self, pg: int, protocols: int) -> str:
         chip_str = "CC131x"
         if protocols & CC26xx.PROTO_MASK_IEEE == CC26xx.PROTO_MASK_IEEE:
             chip_str = "CC135x"
@@ -241,22 +244,20 @@ class CC26xx(Chip):
         if pg == 1:
             pg_str = "PG1.1"
         elif pg == 2 or pg == 3:
-            rev_minor = await self.command_interface.cmdMemRead(
-                self.FCFG_BASE + self.misc_conf_1_offset
-            )
-            rev_minor = rev_minor[0]
-            if rev_minor == 0xFF:
-                rev_minor = 0x00
-            pg_str = f"PG2.{rev_minor:d}"
+            rev_minor = await self._read_bytes(self.FCFG_BASE + self.misc_conf_1_offset)
+            rev_minor_int = rev_minor[0]
+            if rev_minor_int == 0xFF:
+                rev_minor_int = 0x00
+            pg_str = f"PG2.{rev_minor_int:d}"
         else:
             pg_str = "PG1.0"
 
         return f"{chip_str} {pg_str}"
 
-    async def crc(self, address, size):
+    async def crc(self, address: int, size: int) -> int | None:
         return await self.command_interface.cmdCRC32(address, size)
 
-    async def connect(self):
+    async def connect(self) -> None:
         try:
             await self.command_interface.sendSynch()
         except TimeoutError:
@@ -266,7 +267,7 @@ class CC26xx(Chip):
             )
         await self.async_init()
 
-    async def erase(self):
+    async def erase(self) -> None:
         ret = await self.erase_bank()
         if ret and self.m33:
             ret = await self.erase_ccfg()
@@ -275,18 +276,18 @@ class CC26xx(Chip):
         else:
             raise DeviceException("Erase failed")
 
-    async def erase_bank(self):
+    async def erase_bank(self) -> bool | int | bytes:
         _LOGGER.info("Erasing all main bank flash sectors")
         return await self.command_interface.cmdBankErase()
 
-    async def erase_ccfg(self):
+    async def erase_ccfg(self) -> bool | int | bytes:
         _LOGGER.info("Erasing CCFG")
         return await self.command_interface.cmdEraseSector(self.CCFG_BASE)
 
-    async def read_memory(self, addr):
+    async def read_memory(self, addr: int) -> int | bytes:
         return await self.command_interface.cmdMemRead(addr)
 
-    async def set_ieee_address(self, ieee_addr):
+    async def set_ieee_address(self, ieee_addr: int) -> bool:
         formatted_addr = f"{':'.join(f'{b:02x}' for b in struct.pack('>Q', ieee_addr))}"
         _LOGGER.info("Setting IEEE address to %s", formatted_addr)
         ieee_addr_bytes = struct.pack("<Q", ieee_addr)
@@ -295,7 +296,7 @@ class CC26xx(Chip):
             self.addr_ieee_address_secondary, ieee_addr_bytes
         )
 
-    async def flash(self, progress_callback=None):
+    async def flash(self, progress_callback: Any = None) -> None:
         if self._firmware.segments:
             for segment in self._firmware.segments:
                 msg = (
@@ -315,7 +316,7 @@ class CC26xx(Chip):
                 progress_callback=progress_callback,
             )
 
-    async def read(self, length, output):
+    async def read(self, length: int, output: str) -> None:
         # Round up to a 4-byte boundary
         length = (length + 3) & ~0x03
 
@@ -326,6 +327,7 @@ class CC26xx(Chip):
             for i in range(0, length >> 2):
                 # reading 4 bytes at a time
                 rdata = await self.read_memory(self.flash_start_addr + (i * 4))
+                assert isinstance(rdata, bytes), "Expected bytes from read_memory"
                 _LOGGER.debug(  # noqa: UP031
                     " 0x%x: 0x%02x%02x%02x%02x",
                     self.flash_start_addr + (i * 4),
@@ -336,7 +338,7 @@ class CC26xx(Chip):
                 )
                 f.write(rdata)
 
-    async def verify(self):
+    async def verify(self) -> None:
         if self._firmware.segments:
             crc_list = await self.command_interface.cmdCRC32Segment(self._firmware)
 
@@ -353,7 +355,9 @@ class CC26xx(Chip):
                     )
         else:
             crc_local = self._firmware.crc32()
-            crc_target = self.crc(self.flash_start_addr, len(self._firmware.bytes))
+            crc_target = await self.crc(
+                self.flash_start_addr, len(self._firmware.bytes)
+            )
 
             if crc_local == crc_target:
                 _LOGGER.info("Verified (match: 0x%08x)", crc_local)

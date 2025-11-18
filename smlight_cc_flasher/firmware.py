@@ -22,8 +22,9 @@ class Segment:
     end: int
     size: int = field(init=False)
     bytes: bytearray
+    crc32: int = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.size = self.end - self.start
 
         # remove the last byte, which is the empty
@@ -36,7 +37,12 @@ class Segment:
 
 
 class FirmwareFile:
-    def __init__(self, *, path: str | None = None, buffer: bytearray | None = None):
+    segments: list[Segment]
+    bytes: bytearray
+
+    def __init__(
+        self, *, path: str | None = None, buffer: bytearray | None = None
+    ) -> None:
         """
         Read a firmware file and store its data ready for device programming.
 
@@ -57,10 +63,10 @@ class FirmwareFile:
             device
         """
         self._crc32: int | None = None
-        self.segments: list[Any] = []
+        self.segments = []
         self.ih: IntelHex
-        self.size: int = 0
-        file_type = None
+        self.size = 0
+        file_type: str | None = None
 
         if path:
             file_type = magic.from_file(path, mime=True)
@@ -72,35 +78,42 @@ class FirmwareFile:
         if file_type == "text/plain" or file_type == "text/x-hex":
             _LOGGER.info("Firmware file: Intel Hex")
 
-            fobj = StringIO(bytearray(buffer).decode()) if buffer else path
+            fobj: str | StringIO
+            if buffer:
+                fobj = StringIO(bytearray(buffer).decode())
+            else:
+                fobj = path  # type: ignore[assignment]
             self.read_hex(fobj)
         elif (
             file_type == "application/octet-stream"
             or file_type == "application/x-dosexec"
         ):
             _LOGGER.info("Firmware file: Raw Binary")
-            self._read_bin(path)
+            if path:
+                self._read_bin(path)
+            elif buffer:
+                self._read_bin(buffer)
         else:
             error_str = f"Could not determine firmware type, {file_type}"
             raise FwException(error_str)
 
-    def read_hex(self, path: str | StringIO):
+    def read_hex(self, path: str | StringIO) -> None:
         self.ih = IntelHex(path)
         self._process_hex()
 
-    async def from_buffer(self, buffer):
+    async def from_buffer(self, buffer: Any) -> None:
         blob = await buffer.text()
         fobj = StringIO(blob)
         self.ih = IntelHex(fobj)
         self._process_hex()
 
-    def _process_hex(self):
+    def _process_hex(self) -> None:
         for segment in self.ih.segments(min_gap=2048):
             data = bytearray(self.ih.tobinarray(*segment))
             self.segments.append(Segment(segment[0], segment[1], data))
             self.size += len(data)
 
-    def _read_bin(self, source: str | bytearray):
+    def _read_bin(self, source: str | bytearray) -> None:
         if isinstance(source, str):
             with open(source, "rb") as f:
                 self.bytes = bytearray(f.read())
@@ -108,7 +121,7 @@ class FirmwareFile:
             self.bytes = source
         self.size = len(self.bytes)
 
-    def crc32(self):
+    def crc32(self) -> int:
         """
         Return the crc32 checksum of the firmware image
 

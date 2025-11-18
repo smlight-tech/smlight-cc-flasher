@@ -18,6 +18,11 @@ logging.basicConfig(level=LOG_LEVELS[min(len(LOG_LEVELS) - 1, VERBOSE)])
 
 
 class Flasher:
+    command_interface: CommandInterface
+    firmware: FirmwareFile | None
+    chip: CC26xx
+    bootloader: Bootloader
+
     def __init__(
         self,
         device: str,
@@ -25,15 +30,15 @@ class Flasher:
         baudrate: int = 500000,
         m33: bool = False,
         bsl2: bool = False,
-    ):
+    ) -> None:
         self._device = device
         self._baudrate = baudrate
         self._m33 = m33
         self.bsl2 = bsl2
         self.command_interface = CommandInterface()
-        self.firmware: FirmwareFile | None = None
+        self.firmware = None
 
-    async def async_init(self, file: str | None = None):
+    async def async_init(self, file: str | None = None) -> None:
         if file is not None:
             self.firmware = FirmwareFile(path=file)
         self.chip = CC26xx(self.command_interface, self.firmware, self._m33)
@@ -42,15 +47,17 @@ class Flasher:
         if self.bsl2:
             self.bootloader.set_mode("generic2")
 
-    async def connect(self):
+    async def connect(self) -> None:
         _LOGGER.debug("Activate bootloader")
         await self.bootloader.invoke_bootloader()
         await self.chip.connect()
 
-    def set_firmware(self, file):
+    def set_firmware(self, file: FirmwareFile) -> None:
         self.chip.set_firmware(file)
 
-    async def flash(self, progress_callback: Callable[[int, int], Any] | None = None):
+    async def flash(
+        self, progress_callback: Callable[[int, int], Any] | None = None
+    ) -> None:
         await self.chip.erase()
         await self.chip.flash(progress_callback=progress_callback)
         await self.chip.verify()

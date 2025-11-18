@@ -45,13 +45,13 @@ gpioResets = {
 }
 
 
-def _send_gpio_pattern(chip: str, pattern: list[GpioPattern]) -> None:  # noqa: UP031
+def _send_gpio_pattern(chip: str, pattern: list[GpioPattern]) -> None:
     """Send GPIO pattern to chip."""
     logger.debug("Sending GPIO pattern to chip %s", chip)  # noqa: UP031
 
     chip_path = _resolve_chip_path(chip)
 
-    line_config = {
+    line_config: dict[int | str, gpiod.LineSettings] = {
         pin: gpiod.LineSettings(
             direction=gpiod.line.Direction.OUTPUT,
             output_value=gpiod.line.Value(state),
@@ -62,12 +62,14 @@ def _send_gpio_pattern(chip: str, pattern: list[GpioPattern]) -> None:  # noqa: 
     with gpiod.request_lines(
         path=chip_path,
         consumer="smlight-cc-flasher",
-        config=line_config,
+        config=line_config,  # type: ignore[arg-type]
     ) as request:
         time.sleep(pattern[0].delay_after)
 
         for step in pattern[1:]:
-            values = {pin: gpiod.line.Value(state) for pin, state in step.pins.items()}
+            values: dict[int | str, gpiod.line.Value] = {
+                pin: gpiod.line.Value(state) for pin, state in step.pins.items()
+            }
             request.set_values(values)
             time.sleep(step.delay_after)
 

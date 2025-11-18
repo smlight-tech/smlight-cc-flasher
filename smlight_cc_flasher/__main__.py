@@ -3,7 +3,7 @@ import asyncio
 from .cli import main as entry
 
 
-def main():
+def main() -> None:
     asyncio.run(entry())
 
 

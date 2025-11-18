@@ -99,6 +99,7 @@ asyncio_mode = "auto"
 [tool.mypy]
 python_version = "3.12"
 strict = true
+exclude = ["^tests/"]
 
 # Third-party libraries without type stubs
 [[tool.mypy.overrides]]
@@ -106,5 +107,6 @@ module = [
     "serial_asyncio",
     "coloredlogs",
     "intelhex",
+    "magic",
 ]
 ignore_missing_imports = true

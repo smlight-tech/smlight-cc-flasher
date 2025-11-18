@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+from collections.abc import AsyncGenerator
 import logging
 import re
 import socket
 import struct
+from typing import Any
 
 import serial_asyncio
 
@@ -24,16 +26,16 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class PinSetter:
-    def __init__(self, instance, attr_name):
+    def __init__(self, instance: Any, attr_name: str) -> None:
         self.instance = instance
         self.attr_name = attr_name
         self._webserial = hasattr(instance, "webserial")
 
-    async def __call__(self, value=None):
+    async def __call__(self, value: bool | None = None) -> bool | None:
         if not self._webserial:
             if value is not None:
                 setattr(self.instance, self.attr_name, value)
-            return getattr(self.instance, self.attr_name)
+            return bool(getattr(self.instance, self.attr_name))
         else:
             if value is not None:
                 _LOGGER.info("_%s", self.attr_name)
@@ -44,9 +46,9 @@ class PinSetter:
                     self.attr_name,
                     getattr(self.instance, f"_{self.attr_name}"),
                 )
-            return
+            return None
 
-    def get_instance(self):
+    def get_instance(self) -> Any:
         return self.instance
 
 
@@ -60,7 +62,7 @@ class Bootloader:
 
     CONNECT_TIMEOUT = 1
 
-    def __init__(self, device, transport) -> None:
+    def __init__(self, device: str, transport: Any) -> None:
         self._device = device
         self._serial = transport.serial
         self._dtr_active_high = False
@@ -70,6 +72,7 @@ class Bootloader:
         self._smlight_net = False
         self._gpio = False
         self._gpio_config: GpioConfig | None = None
+        self._host: str
         match = re.match(r"socket://([^:]+):([0-9]+)", device)
         if match:
             self._host = match.group(1)
@@ -111,7 +114,7 @@ class Bootloader:
         self._dtr_active_high = dtr_active_high
         self._inverted = inverted
 
-    async def invoke_bootloader(self):
+    async def invoke_bootloader(self) -> None:
         if self._smlight_net or "socket" in self._device:
             await self.invoke_smlight_net(self._host)
         elif self._gpio:
@@ -132,7 +135,7 @@ class Bootloader:
 
         await asyncio.sleep(0.1)
 
-    async def invoke_generic2(self):
+    async def invoke_generic2(self) -> None:
         _LOGGER.info("Activating generic2 BSL")
         # Dongles that use Flipflop logic for bsl.
         # Connection between RTS DTR and reset and IO15:
@@ -149,7 +152,7 @@ class Bootloader:
         await asyncio.sleep(0.2)
         await self.set_bootloader_pin(False)
 
-    async def invoke_generic(self):
+    async def invoke_generic(self) -> None:
         await self.set_bootloader_pin(True if not self._dtr_active_high else False)
         await self.set_reset_pin(True)
         await self.set_reset_pin(False)
@@ -157,7 +160,7 @@ class Bootloader:
         await self.set_bootloader_pin(False if not self._dtr_active_high else True)
         # await asyncio.sleep(0.5)
 
-    async def invoke_gpio(self):
+    async def invoke_gpio(self) -> None:
         """Invoke bootloader using GPIO pattern."""
         from .gpio import send_gpio_pattern
 
@@ -167,7 +170,7 @@ class Bootloader:
         _LOGGER.info("Activating BSL via GPIO on %s", self._gpio_config.chip)
         await send_gpio_pattern(self._gpio_config.chip, self._gpio_config.patterns)
 
-    async def invoke_smlight_net(self, host) -> bool:
+    async def invoke_smlight_net(self, host: str) -> bool:
         from pysmlight.const import Commands
         from pysmlight.web import Api2
 
@@ -176,36 +179,40 @@ class Bootloader:
             if await client.check_auth_needed():
                 return False
 
-            return await client.set_cmd(Commands.CMD_ZB_BSL)
+            return bool(await client.set_cmd(Commands.CMD_ZB_BSL))  # type: ignore[attr-defined]
 
 
 class CommandInterface:
     ACK = b"\x00\xcc"
     NACK = b"\x00\x33"
 
-    async def open(self, aport=None, abaudrate=500000):
+    reader: asyncio.StreamReader
+    writer: asyncio.StreamWriter
+    webserial: bool
+
+    async def open(self, aport: str | None = None, abaudrate: int = 500000) -> None:
         self.reader, self.writer = await serial_asyncio.open_serial_connection(
             url=aport,
             baudrate=abaudrate,  # , timeout=1
         )
-        self.webserial = hasattr(self.writer.transport.serial, "webserial")
+        self.webserial = hasattr(self.writer.transport.serial, "webserial")  # type: ignore[attr-defined]
         _LOGGER.info("Opened port %s, baud %d", aport, abaudrate)
 
         sock = self.writer.transport.get_extra_info("socket")
         if sock is not None:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
-    async def close(self):
+    async def close(self) -> None:
         _LOGGER.info("Closing port")
 
         self.writer.close()
         await self.writer.wait_closed()
 
     @property
-    def transport(self):
+    def transport(self) -> Any:
         return self.writer.transport
 
-    async def _wait_for_ack(self, cmd: COMMAND, timeout=1):
+    async def _wait_for_ack(self, cmd: COMMAND, timeout: int = 1) -> bool:
         got = bytearray()
         info = f"{COMMAND_STRS[cmd.value]} (0x{cmd.value:02X})"
         while True:
@@ -229,9 +236,10 @@ class CommandInterface:
 
     def _decode_addr(self, addr: bytes) -> int:
         """decode bytes as 32-bit integer"""
-        return struct.unpack(">I", addr)[0]
+        result: tuple[int] = struct.unpack(">I", addr)
+        return result[0]
 
-    async def _write(self, data):
+    async def _write(self, data: int | bytes | bytearray) -> None:
         if isinstance(data, int):
             assert data < 256
             data = bytes([data])
@@ -248,16 +256,16 @@ class CommandInterface:
 
     async def _sendCmd(
         self,
-        cmd,
+        cmd: COMMAND,
         *,
         addr: int | None = None,
         size: int | None = None,
         data: bytes | bytearray | None = None,
         extra: bytes | bytearray | None = None,
     ) -> None:
-        cmd = bytes([cmd.value])
+        cmd_bytes = bytes([cmd.value])
 
-        packet = cmd
+        packet = cmd_bytes
 
         if addr is not None:
             packet += self._encode_addr(addr)
@@ -274,12 +282,20 @@ class CommandInterface:
 
         crc = bytes([sum(packet) & 0xFF])
         packet = crc + packet
-        if cmd != b"\x55":
+        if cmd_bytes != b"\x55":
             packet = bytes([len(packet) + 1]) + packet
 
         await self._write(packet)
 
-    async def _processCmd(self, cmd, *, addr=None, size=None, data=None, extra=None):
+    async def _processCmd(
+        self,
+        cmd: COMMAND,
+        *,
+        addr: int | None = None,
+        size: int | None = None,
+        data: bytes | bytearray | None = None,
+        extra: bytes | bytearray | None = None,
+    ) -> bool | int | bytes:
         _LOGGER.debug("*** %s command (0x%02x)", COMMAND_STRS[cmd.value], cmd.value)
         await self._sendCmd(cmd, addr=addr, size=size, data=data, extra=extra)
 
@@ -300,7 +316,7 @@ class CommandInterface:
             return ret
         return False
 
-    async def receivePacket(self):
+    async def receivePacket(self) -> int | bytes:
         hdr = await self.reader.readexactly(2)
         size, chks = hdr
         data = await self.reader.readexactly(size - 2)
@@ -313,45 +329,49 @@ class CommandInterface:
             await self._write(CommandInterface.NACK)
             raise CmdException("Received packet checksum error")
 
-    async def sendSynch(self):
+    async def sendSynch(self) -> bool:
         cmd = COMMAND.SYNCH
 
         if not self.webserial:
-            self.writer.transport.flush()
+            self.writer.transport.flush()  # type: ignore[attr-defined]
 
-        return await self._processCmd(cmd)
+        return bool(await self._processCmd(cmd))
 
-    async def checkLastCmd(self):
+    async def checkLastCmd(self) -> bool:
         status = await self.cmdGetStatus()
-        if not (status):
+        if not status:
             raise CmdException("No response from target on status request.")
 
-        if status == COMMAND_RET.SUCCESS.value:
+        status_int = status[0] if isinstance(status, bytes) else int(status)
+
+        if status_int == COMMAND_RET.SUCCESS.value:
             return True
         else:
-            status_str = RETURN_CMD_STRS.get(status, None)
+            status_str = RETURN_CMD_STRS.get(status_int, None)
             if status_str is None:
-                _LOGGER.error("Warning: unrecognized status returned 0x%x", status)
+                _LOGGER.error("Warning: unrecognized status returned 0x%x", status_int)
             else:
-                _LOGGER.error("Target returned: 0x%x, %s", status, status_str)
+                _LOGGER.error("Target returned: 0x%x, %s", status_int, status_str)
             return False
 
-    async def cmdPing(self):
+    async def cmdPing(self) -> bool:
         cmd = COMMAND.PING
 
-        return await self._processCmd(cmd)
+        return bool(await self._processCmd(cmd))
 
-    async def cmdReset(self):
+    async def cmdReset(self) -> bool:
         cmd = COMMAND.RESET
 
-        return await self._processCmd(cmd)
+        return bool(await self._processCmd(cmd))
 
-    async def cmdGetChipId(self):
+    async def cmdGetChipId(self) -> int:
         cmd = COMMAND.GET_CHIP_ID
 
         version = await self._processCmd(cmd)
 
         if version:
+            if isinstance(version, int):
+                return version
             assert len(version) == 4, f"Unreasonable chip id: {repr(version)}"
             _LOGGER.debug("Version 0x%s", "".join(f"{v:02X}" for v in version))
             chip_id = (version[2] << 8) | version[3]
@@ -359,36 +379,38 @@ class CommandInterface:
         else:
             raise CmdException("GetChipID (0x28) failed")
 
-    async def cmdGetStatus(self):
+    async def cmdGetStatus(self) -> bool | int | bytes:
         cmd = COMMAND.GET_STATUS
 
         return await self._processCmd(cmd)
 
-    async def cmdEraseSector(self, addr):
+    async def cmdEraseSector(self, addr: int) -> bool:
         """cc26xx only"""
         cmd = COMMAND.SECTOR_ERASE
 
-        return await self._processCmd(cmd, addr=addr)
+        return bool(await self._processCmd(cmd, addr=addr))
 
-    async def cmdBankErase(self):
+    async def cmdBankErase(self) -> bool:
         cmd = COMMAND.BANK_ERASE
 
-        return await self._processCmd(cmd)
+        return bool(await self._processCmd(cmd))
 
-    async def cmdCRC32(self, addr, size):
+    async def cmdCRC32(self, addr: int, size: int) -> int | None:
         cmd = COMMAND.CRC32
         extra = self._encode_addr(0x00000000)
         crc = await self._processCmd(cmd, addr=addr, size=size, extra=extra)
         if crc:
+            assert isinstance(crc, bytes), "CRC32 command should return bytes"
             return self._decode_addr(crc)
+        return None
 
-    async def cmdCRC32Segment(self, firmware):
+    async def cmdCRC32Segment(self, firmware: Any) -> list[int | None]:
         crc32 = []
         for segment in firmware.segments:
             crc32.append(await self.cmdCRC32(segment.start, segment.size))
         return crc32
 
-    async def cmdDownload(self, addr, size):
+    async def cmdDownload(self, addr: int, size: int) -> bool:
         cmd = COMMAND.DOWNLOAD
 
         if (size % 4) != 0:  # check for invalid data lengths
@@ -396,9 +418,9 @@ class CommandInterface:
                 "Invalid data size: %d. Size must be a multiple of 4.", size
             )
 
-        return await self._processCmd(cmd, addr=addr, size=size)
+        return bool(await self._processCmd(cmd, addr=addr, size=size))
 
-    async def cmdDownloadCRC32(self, addr, size, crc):
+    async def cmdDownloadCRC32(self, addr: int, size: int, crc: int) -> bool:
         cmd = COMMAND.DOWNLOAD_CRC
 
         if (size % 4) != 0:  # check for invalid data lengths
@@ -406,22 +428,24 @@ class CommandInterface:
                 "Invalid data size: %d. Size must be a multiple of 4.", size
             )
 
-        return await self._processCmd(
-            cmd, addr=addr, size=size, extra=self._encode_addr(crc)
+        return bool(
+            await self._processCmd(
+                cmd, addr=addr, size=size, extra=self._encode_addr(crc)
+            )
         )
 
-    async def cmdSendData(self, data):
+    async def cmdSendData(self, data: bytes | bytearray) -> bool:
         cmd = COMMAND.SEND_DATA
         # data = bytearray(data)
         assert isinstance(data, bytes | bytearray), "Bad data type"
-        return await self._processCmd(cmd, data=data)
+        return bool(await self._processCmd(cmd, data=data))
 
-    async def cmdMemRead(self, addr):
+    async def cmdMemRead(self, addr: int) -> int | bytes:
         cmd = COMMAND.MEMORY_READ
         data = await self._processCmd(cmd, addr=addr, extra=b"\x01\x01")
         return data
 
-    async def cmdMemWrite(self, addr, data, width):
+    async def cmdMemWrite(self, addr: int, data: bytes | bytearray, width: int) -> bool:
         """cc26xx"""
         if width != len(data):
             raise ValueError("width does not match len(data)")
@@ -430,14 +454,22 @@ class CommandInterface:
 
         cmd = COMMAND.MEMORY_WRITE
 
-        return await self._processCmd(cmd, addr=addr, data=data, extra=b"\x01")
+        return bool(await self._processCmd(cmd, addr=addr, data=data, extra=b"\x01"))
 
-    async def arange(self, start, stop, step):
+    async def arange(
+        self, start: int, stop: int, step: int
+    ) -> AsyncGenerator[int, None]:
         for i in range(start, stop, step):
             yield i
             await asyncio.sleep(0.0)
 
-    async def writeMemory(self, addr, data, *, progress_callback=None):
+    async def writeMemory(
+        self,
+        addr: int,
+        data: bytes | bytearray,
+        *,
+        progress_callback: Any = None,
+    ) -> bool:
         length = len(data)
         # amount of data bytes transferred per packet (theory: max 252 + 3)
         pkt_size = MAX_BLOCK_SIZE
