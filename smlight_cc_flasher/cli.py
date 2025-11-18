@@ -44,15 +44,15 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class CLI:
-    def __init__(self):
+    def __init__(self) -> None:
         self.parser = argparse.ArgumentParser(prog="smlight_cc_flasher")
         self.args = self.cli_setup()
         self.validate_args(self.args)
 
-    def config_logging(self, log_level):
+    def config_logging(self, log_level: str) -> None:
         coloredlogs.install(level=log_level, milliseconds=True)
 
-    def validate_device(self, value):
+    def validate_device(self, value: str) -> str:
         windows_pattern = r"^COM\d+$"
         linux_pattern = r"^/dev/tty(USB|ACM|S)\d+$"
         macos_pattern = r"^/dev/tty\.(usbserial|usbmodem)[A-Za-z0-9.-]+$"
@@ -72,7 +72,7 @@ class CLI:
                 "/dev/tty.usbserial-1234) or a network socket (e.g., socket://host.local:9933)."
             )
 
-    def cli_setup(self):
+    def cli_setup(self) -> argparse.Namespace:
         parser = self.parser
 
         parser.add_argument("-q", action="store_true", help="Quiet")
@@ -156,7 +156,7 @@ class CLI:
         self.args = parser.parse_args()
         return self.args
 
-    def validate_args(self, args):
+    def validate_args(self, args: argparse.Namespace) -> None:
         if args.read and not args.output:
             self.parser.error("--output is required when --read is specified")
 
@@ -179,7 +179,7 @@ class CLI:
         if not args.device and args.host:
             args.device = f"socket://{args.host}:{args.port}"
 
-    def auto_port(self):
+    def auto_port(self) -> None:
         """Try to find the port automatically."""
         ports = []
         # use serial.tools.list_ports.comports() instead?
@@ -222,7 +222,7 @@ class CLI:
             return addr
 
 
-async def main():
+async def main() -> None:
     cli = CLI()
     args = cli.args
     firmware = None

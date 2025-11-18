@@ -20,5 +20,10 @@ repos:
     rev: v1.13.0
     hooks:
       - id: mypy
+        args:
+          - --strict
         additional_dependencies:
-          - zigpy
+          - types-tqdm
+          - gpiod>=2.4.0
+          - pysmlight~=0.2.9
+        exclude: ^tests/
