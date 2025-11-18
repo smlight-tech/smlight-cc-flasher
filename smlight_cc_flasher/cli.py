@@ -126,8 +126,7 @@ class CLI:
         parser.add_argument(
             "--bootloader-reset",
             default="generic",
-            choices=["generic", "none", "generic2", "network"],
-            help="Bootloader mode",
+            help="Bootloader mode: none, generic, generic2, network, or GPIO config name (e.g., smhub)",
         )
         parser.add_argument(
             "--bootloader-active-high",
