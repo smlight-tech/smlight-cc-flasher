@@ -18,6 +18,7 @@ from .const import (
     RETURN_CMD_STRS,
 )
 from .exceptions import CmdException
+from .gpio import GpioConfig, gpioResets
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class Bootloader:
     Automatically invoke the bootloader on a device.
     Use DTR/RTS to reset the device and enter the bootloader.
     For SLZB-06 use the network API to invoke the bootloader.
+    For devices with GPIO control, use GPIO patterns to enter bootloader.
     """
 
     CONNECT_TIMEOUT = 1
@@ -66,6 +68,8 @@ class Bootloader:
         self._generic = True
         self._generic2 = False
         self._smlight_net = False
+        self._gpio = False
+        self._gpio_config: GpioConfig | None = None
         match = re.match(r"socket://([^:]+):([0-9]+)", device)
         if match:
             self._host = match.group(1)
@@ -76,14 +80,32 @@ class Bootloader:
             self._host = host
             self._smlight_net = True
 
-        if mode == "generic2":
-            self._generic2 = True
-        elif mode == "network":
-            self._smlight_net = True
-
-        if self._generic2 or self._smlight_net:
+        if mode != "generic":
             self._generic = False
+
+        match mode:
+            case "generic":
+                pass
+            case "generic2":
+                self._generic2 = True
+            case "network":
+                self._smlight_net = True
+            case "none":
+                pass
+            case _:
+                # Assume it's a GPIO config name
+                self.set_gpio_config(mode)
+                self._gpio = True
         return
+
+    def set_gpio_config(self, config_name: str) -> None:
+        """Set the GPIO configuration to use."""
+        if config_name not in gpioResets:
+            raise ValueError(
+                f"GPIO config '{config_name}' not found. "
+                f"Available configs: {', '.join(gpioResets.keys())}"
+            )
+        self._gpio_config = gpioResets[config_name]
 
     def set_options(self, dtr_active_high: bool, inverted: bool) -> None:
         self._dtr_active_high = dtr_active_high
@@ -91,16 +113,20 @@ class Bootloader:
 
     async def invoke_bootloader(self):
         if not ("socket" in self._device or self._smlight_net):
-            if self._inverted:
-                self.set_bootloader_pin = PinSetter(self._serial, "rts")
-                self.set_reset_pin = PinSetter(self._serial, "dtr")
+            if self._gpio:
+                await self.invoke_gpio()
             else:
-                self.set_bootloader_pin = PinSetter(self._serial, "dtr")
-                self.set_reset_pin = PinSetter(self._serial, "rts")
-            if self._generic2:
-                await self.invoke_generic2()
-            else:
-                await self.invoke_generic()
+                if self._inverted:
+                    self.set_bootloader_pin = PinSetter(self._serial, "rts")
+                    self.set_reset_pin = PinSetter(self._serial, "dtr")
+                else:
+                    self.set_bootloader_pin = PinSetter(self._serial, "dtr")
+                    self.set_reset_pin = PinSetter(self._serial, "rts")
+
+                if self._generic2:
+                    await self.invoke_generic2()
+                else:
+                    await self.invoke_generic()
         else:
             await self.invoke_smlight_net(self._host)
 
@@ -130,6 +156,16 @@ class Bootloader:
         await asyncio.sleep(0.2)
         await self.set_bootloader_pin(False if not self._dtr_active_high else True)
         # await asyncio.sleep(0.5)
+
+    async def invoke_gpio(self):
+        """Invoke bootloader using GPIO pattern."""
+        from .gpio import send_gpio_pattern
+
+        if self._gpio_config is None:
+            raise ValueError("GPIO config not set. Call set_gpio_config() first.")
+
+        _LOGGER.info("Activating BSL via GPIO on %s", self._gpio_config.chip)
+        await send_gpio_pattern(self._gpio_config.chip, self._gpio_config.patterns)
 
     async def invoke_smlight_net(self, host) -> bool:
         from pysmlight.const import Commands
