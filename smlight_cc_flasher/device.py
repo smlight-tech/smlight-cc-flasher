@@ -312,7 +312,7 @@ class CC26xx(Chip):
         else:
             await self.command_interface.writeMemory(
                 self.flash_start_addr,
-                self._firmware.bytes,
+                self._firmware.data,
                 progress_callback=progress_callback,
             )
 
@@ -355,9 +355,7 @@ class CC26xx(Chip):
                     )
         else:
             crc_local = self._firmware.crc32()
-            crc_target = await self.crc(
-                self.flash_start_addr, len(self._firmware.bytes)
-            )
+            crc_target = await self.crc(self.flash_start_addr, len(self._firmware.data))
 
             if crc_local == crc_target:
                 _LOGGER.info("Verified (match: 0x%08x)", crc_local)

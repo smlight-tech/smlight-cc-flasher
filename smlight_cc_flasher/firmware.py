@@ -38,10 +38,13 @@ class Segment:
 
 class FirmwareFile:
     segments: list[Segment]
-    bytes: bytearray
+    data: bytearray
 
     def __init__(
-        self, *, path: str | None = None, buffer: bytearray | None = None
+        self,
+        *,
+        path: str | None = None,
+        buffer: bytes | None = None,
     ) -> None:
         """
         Read a firmware file and store its data ready for device programming.
@@ -59,7 +62,7 @@ class FirmwareFile:
             path -- A str with the path to the firmware file.
 
         Attributes:
-            bytes: A bytearray with firmware contents ready to send to the
+            data: A bytearray with firmware contents ready to send to the
             device
         """
         self._crc32: int | None = None
@@ -113,13 +116,13 @@ class FirmwareFile:
             self.segments.append(Segment(segment[0], segment[1], data))
             self.size += len(data)
 
-    def _read_bin(self, source: str | bytearray) -> None:
+    def _read_bin(self, source: str | bytes | bytearray) -> None:
         if isinstance(source, str):
             with open(source, "rb") as f:
-                self.bytes = bytearray(f.read())
+                self.data = bytearray(f.read())
         else:
-            self.bytes = source
-        self.size = len(self.bytes)
+            self.data = bytearray(source)
+        self.size = len(self.data)
 
     def crc32(self) -> int:
         """
@@ -130,7 +133,7 @@ class FirmwareFile:
             returned by the ROM bootloader's COMMAND_CRC32
         """
         if self._crc32 is None:
-            self._crc32 = binascii.crc32(bytearray(self.bytes)) & 0xFFFFFFFF
+            self._crc32 = binascii.crc32(bytearray(self.data)) & 0xFFFFFFFF
 
         return self._crc32
 

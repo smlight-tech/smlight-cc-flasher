@@ -41,7 +41,7 @@ class Flasher:
     async def async_init(
         self,
         file: str | None = None,
-        buffer: bytearray | None = None,
+        buffer: bytes | None = None,
         bootloader_mode: str | None = None,
     ) -> None:
         if file is not None and buffer is not None:
