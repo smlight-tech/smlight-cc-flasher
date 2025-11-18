@@ -55,7 +55,7 @@ class Bootloader:
     Automatically invoke the bootloader on a device.
     Use DTR/RTS to reset the device and enter the bootloader.
     For SLZB-06 use the network API to invoke the bootloader.
-    For devices with GPIO control, use GPIO patterns to enter bootloader.
+    For devices with GPIO controls, use GPIO patterns to enter bootloader.
     """
 
     CONNECT_TIMEOUT = 1

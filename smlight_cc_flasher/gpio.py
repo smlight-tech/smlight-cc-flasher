@@ -1,11 +1,23 @@
 import asyncio
 import dataclasses
 import logging
+import os
 import time
 
 import gpiod
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_chip_path(chip: str) -> str:
+    """Resolve chip name to full device path."""
+    if chip.startswith("/dev"):
+        return chip
+
+    chip_path = f"/dev/{chip}"
+    if not os.path.exists(chip_path):
+        raise FileNotFoundError(f"GPIO chip '{chip}' not found at {chip_path}. ")
+    return chip_path
 
 
 @dataclasses.dataclass
@@ -37,6 +49,8 @@ def _send_gpio_pattern(chip: str, pattern: list[GpioPattern]) -> None:  # noqa: 
     """Send GPIO pattern to chip."""
     logger.debug("Sending GPIO pattern to chip %s", chip)  # noqa: UP031
 
+    chip_path = _resolve_chip_path(chip)
+
     line_config = {
         pin: gpiod.LineSettings(
             direction=gpiod.line.Direction.OUTPUT,
@@ -46,7 +60,7 @@ def _send_gpio_pattern(chip: str, pattern: list[GpioPattern]) -> None:  # noqa: 
     }
 
     with gpiod.request_lines(
-        chip,
+        path=chip_path,
         consumer="smlight-cc-flasher",
         config=line_config,
     ) as request:
