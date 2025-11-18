@@ -20,5 +20,7 @@ repos:
     rev: v1.13.0
     hooks:
       - id: mypy
+        args:
+          - --strict
         additional_dependencies:
-          - zigpy
+          - types-tqdm
