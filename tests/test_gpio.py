@@ -32,7 +32,7 @@ async def test_send_gpio_pattern_basic(mock_gpiod, mocker, sample_gpio_config):
 
     mock_gpiod.request_lines.assert_called_once()
     call_args = mock_gpiod.request_lines.call_args
-    assert call_args[0][0] == sample_gpio_config.chip
+    assert call_args[1]["path"] == f"/dev/{sample_gpio_config.chip}"
     assert call_args[1]["consumer"] == "smlight-cc-flasher"
 
     mock_request = mock_gpiod.request_lines.return_value.__enter__.return_value

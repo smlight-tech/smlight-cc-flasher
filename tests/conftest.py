@@ -8,6 +8,8 @@ from smlight_cc_flasher.gpio import GpioConfig, GpioPattern
 @pytest.fixture
 def mock_gpiod(mocker):
     """Mock gpiod module."""
+    mocker.patch("smlight_cc_flasher.gpio.os.path.exists", return_value=True)
+
     mock = mocker.patch("smlight_cc_flasher.gpio.gpiod")
 
     mock.LineSettings.return_value = mocker.MagicMock()

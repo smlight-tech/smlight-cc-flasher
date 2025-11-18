@@ -6,6 +6,7 @@ coverage[toml]
 pytest
 pytest-asyncio
 pytest-cov
+pytest-mock
 pytest-timeout
 freezegun
 ruff==0.0.261
