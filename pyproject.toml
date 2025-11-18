@@ -110,3 +110,8 @@ module = [
     "magic",
 ]
 ignore_missing_imports = true
+
+# Generated version file
+[[tool.mypy.overrides]]
+module = "smlight_cc_flasher._version"
+ignore_missing_imports = true
