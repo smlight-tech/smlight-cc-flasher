@@ -38,14 +38,27 @@ class Flasher:
         self.command_interface = CommandInterface()
         self.firmware = None
 
-    async def async_init(self, file: str | None = None) -> None:
+    async def async_init(
+        self,
+        file: str | None = None,
+        buffer: bytes | None = None,
+        bootloader_mode: str | None = None,
+    ) -> None:
+        if file is not None and buffer is not None:
+            raise ValueError("Cannot specify both file and buffer")
         if file is not None:
             self.firmware = FirmwareFile(path=file)
+        elif buffer is not None:
+            self.firmware = FirmwareFile(buffer=buffer)
+
         self.chip = CC26xx(self.command_interface, self.firmware, self._m33)
         await self.command_interface.open(self._device, self._baudrate)
+
         self.bootloader = Bootloader(self._device, self.command_interface.transport)
         if self.bsl2:
             self.bootloader.set_mode("generic2")
+        elif bootloader_mode is not None:
+            self.bootloader.set_mode(bootloader_mode)
 
     async def connect(self) -> None:
         _LOGGER.debug("Activate bootloader")
@@ -58,6 +71,8 @@ class Flasher:
     async def flash(
         self, progress_callback: Callable[[int, int], Any] | None = None
     ) -> None:
+        if self.firmware is None:
+            raise ValueError("Firmware not set. Initialise with file or buffer first.")
         await self.chip.erase()
         await self.chip.flash(progress_callback=progress_callback)
         await self.chip.verify()
