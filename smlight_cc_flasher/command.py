@@ -179,7 +179,7 @@ class Bootloader:
             if await client.check_auth_needed():
                 return False
 
-            return bool(await client.set_cmd(Commands.CMD_ZB_BSL))  # type: ignore[attr-defined]
+            return bool(await client.set_cmd(Commands.CMD_ZB_BSL))
 
 
 class CommandInterface:
