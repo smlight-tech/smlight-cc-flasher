@@ -34,6 +34,15 @@ class GpioConfig:
 
 gpioResets = {
     "smhub": GpioConfig(
+        chip="gpiochip2",
+        patterns=[
+            GpioPattern(pins={11: True, 12: True}, delay_after=0.1),
+            GpioPattern(pins={11: False, 12: False}, delay_after=0.1),
+            GpioPattern(pins={11: True, 12: False}, delay_after=0.1),
+            GpioPattern(pins={11: True, 12: True}, delay_after=0.1),
+        ],
+    ),
+    "smhub-1": GpioConfig(
         chip="gpiochip1",
         patterns=[
             GpioPattern(pins={11: True, 12: True}, delay_after=0.1),
@@ -41,7 +50,7 @@ gpioResets = {
             GpioPattern(pins={11: True, 12: False}, delay_after=0.1),
             GpioPattern(pins={11: True, 12: True}, delay_after=0.1),
         ],
-    )
+    ),
 }
 
 
