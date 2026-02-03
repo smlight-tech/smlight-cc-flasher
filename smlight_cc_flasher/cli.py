@@ -151,12 +151,15 @@ class CLI:
         parser.add_argument(
             "--version", action="version", version="%(prog)s " + __version__
         )
-        parser.add_argument("file")
+        parser.add_argument("file", nargs="?")
 
         self.args = parser.parse_args()
         return self.args
 
     def validate_args(self, args: argparse.Namespace) -> None:
+        if (args.write or args.verify) and not args.file:
+            self.parser.error("Firmware file is required for write or verification.")
+
         if args.read and not args.output:
             self.parser.error("--output is required when --read is specified")
 
