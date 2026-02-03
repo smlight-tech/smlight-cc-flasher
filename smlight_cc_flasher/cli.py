@@ -147,6 +147,11 @@ class CLI:
             action="store_true",
             help="After finishing, disable the bootloader",
         )
+        parser.add_argument(
+            "--keep-open",
+            action="store_true",
+            help="Keep the bootloader open on exit",
+        )
 
         parser.add_argument(
             "--version", action="version", version="%(prog)s " + __version__
@@ -284,5 +289,6 @@ async def main() -> None:
     if args.disable_bootloader:
         device.disable_bootloader(args.force)
 
-    await cmd.cmdReset()
+    if not args.keep_open:
+        await cmd.cmdReset()
     await cmd.close()
