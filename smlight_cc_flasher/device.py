@@ -292,9 +292,16 @@ class CC26xx(Chip):
         _LOGGER.info("Setting IEEE address to %s", formatted_addr)
         ieee_addr_bytes = struct.pack("<Q", ieee_addr)
 
-        return await self.command_interface.writeMemory(
-            self.addr_ieee_address_secondary, ieee_addr_bytes
-        )
+        if self.m33:
+            addr = self.addr_ieee_address_secondary
+        else:
+            addr = (
+                self.size
+                - self.page_size
+                + (self.addr_ieee_address_secondary - self.CCFG_BASE)
+            )
+
+        return await self.command_interface.writeMemory(addr, ieee_addr_bytes)
 
     async def flash(self, progress_callback: Any = None) -> None:
         if self._firmware.segments:
