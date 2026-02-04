@@ -27,7 +27,7 @@ from tqdm.asyncio import tqdm
 from . import __version__
 from .command import Bootloader, CommandInterface
 from .const import MAX_BLOCK_SIZE
-from .device import CC26xx
+from .device import CC26xx, parse_ieee_address
 from .exceptions import CliException
 from .firmware import FirmwareFile
 
@@ -151,12 +151,15 @@ class CLI:
         parser.add_argument(
             "--version", action="version", version="%(prog)s " + __version__
         )
-        parser.add_argument("file")
+        parser.add_argument("file", nargs="?")
 
         self.args = parser.parse_args()
         return self.args
 
     def validate_args(self, args: argparse.Namespace) -> None:
+        if (args.write or args.verify) and not args.file:
+            self.parser.error("Firmware file is required for write or verification.")
+
         if args.read and not args.output:
             self.parser.error("--output is required when --read is specified")
 
@@ -200,26 +203,6 @@ class CLI:
             self.args.device = ports[0]
         else:
             raise Exception("No serial port found.")
-
-    def parse_ieee_address(self, inaddr: str) -> int:
-        """Convert an entered IEEE address into an integer"""
-        try:
-            return int(inaddr, 16)
-        except ValueError:
-            # inaddr is not a hex string, look for other formats
-            if ":" in inaddr:
-                bytes = inaddr.split(":")
-            elif "-" in inaddr:
-                bytes = inaddr.split("-")
-            if len(bytes) != 8:
-                raise ValueError("Supplied IEEE address does not contain 8 bytes")
-            addr = 0
-            for i, b in zip(range(8), bytes):
-                try:
-                    addr += int(b, 16) << (56 - (i * 8))
-                except ValueError:
-                    raise ValueError("IEEE address contains invalid bytes")
-            return addr
 
 
 async def main() -> None:
@@ -290,11 +273,13 @@ async def main() -> None:
         await device.verify()
 
     if args.ieee_address:
-        ieee_addr = cli.parse_ieee_address(args.ieee_address)
-        if await device.set_ieee_address(ieee_addr):
-            _LOGGER.info("Set address done")
+        device.ieee_address_secondary = parse_ieee_address(args.ieee_address)
+
+    if (args.write or args.ieee_address) and device.ieee_address_secondary:
+        if await device.set_ieee_address(device.ieee_address_secondary):
+            _LOGGER.info("IEEE address set successfully")
         else:
-            raise CliException("Set address failed")
+            raise CliException("IEEE address set failed")
 
     if args.disable_bootloader:
         device.disable_bootloader(args.force)

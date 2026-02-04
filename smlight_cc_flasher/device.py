@@ -14,6 +14,31 @@ from .firmware import FirmwareFile
 _LOGGER = logging.getLogger(__name__)
 
 
+def parse_ieee_address(inaddr: str) -> int:
+    """Convert an entered IEEE address into an integer."""
+    try:
+        return int(inaddr, 16)
+    except ValueError:
+        pass
+
+    parts = []
+    if ":" in inaddr:
+        parts = inaddr.split(":")
+    elif "-" in inaddr:
+        parts = inaddr.split("-")
+
+    if len(parts) != 8:
+        raise ValueError("Supplied IEEE address is not valid")
+
+    addr = 0
+    for i, b in zip(range(8), parts):
+        try:
+            addr += int(b, 16) << (56 - (i * 8))
+        except ValueError:
+            raise ValueError("IEEE address contains invalid bytes")
+    return addr
+
+
 class Chip:
     def __init__(self, command_interface: CommandInterface, m33: bool = False) -> None:
         self.command_interface = command_interface
@@ -75,6 +100,7 @@ class CC26xx(Chip):
         m33: bool = False,
     ) -> None:
         super().__init__(command_interface, m33)
+        self.ieee_address_secondary: int | None = None
         if firmware:
             self._firmware = firmware
 
@@ -186,6 +212,18 @@ class CC26xx(Chip):
             "Primary IEEE Address: %s", ":".join(f"{x:02x}" for x in ieee_addr)
         )
 
+        ieee_addr_sec = await self._read_bytes(self.addr_ieee_address_secondary + 4)
+        ieee_addr_sec = ieee_addr_sec[::-1]
+        ieee_addr_sec2 = await self._read_bytes(self.addr_ieee_address_secondary)
+        ieee_addr_sec += ieee_addr_sec2[::-1]
+
+        if ieee_addr_sec != b"\xff" * 8:
+            self.ieee_address_secondary = int.from_bytes(ieee_addr_sec, byteorder="big")
+            _LOGGER.info(
+                "Secondary IEEE Address: %s",
+                ":".join(f"{x:02x}" for x in ieee_addr_sec),
+            )
+
     async def _identify_cc26xx(self, pg: int, protocols: int) -> str:
         chips_dict = {
             CC26xx.PROTO_MASK_IEEE: "CC2630",
@@ -292,9 +330,16 @@ class CC26xx(Chip):
         _LOGGER.info("Setting IEEE address to %s", formatted_addr)
         ieee_addr_bytes = struct.pack("<Q", ieee_addr)
 
-        return await self.command_interface.writeMemory(
-            self.addr_ieee_address_secondary, ieee_addr_bytes
-        )
+        if self.m33:
+            addr = self.addr_ieee_address_secondary
+        else:
+            addr = (
+                self.size
+                - self.page_size
+                + (self.addr_ieee_address_secondary - self.CCFG_BASE)
+            )
+
+        return await self.command_interface.writeMemory(addr, ieee_addr_bytes)
 
     async def flash(self, progress_callback: Any = None) -> None:
         if self._firmware.segments:
