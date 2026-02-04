@@ -186,6 +186,17 @@ class CC26xx(Chip):
             "Primary IEEE Address: %s", ":".join(f"{x:02x}" for x in ieee_addr)
         )
 
+        ieee_addr_sec = await self._read_bytes(self.addr_ieee_address_secondary + 4)
+        ieee_addr_sec = ieee_addr_sec[::-1]
+        ieee_addr_sec2 = await self._read_bytes(self.addr_ieee_address_secondary)
+        ieee_addr_sec += ieee_addr_sec2[::-1]
+
+        if ieee_addr_sec != b"\xff" * 8:
+            _LOGGER.info(
+                "Secondary IEEE Address: %s",
+                ":".join(f"{x:02x}" for x in ieee_addr_sec),
+            )
+
     async def _identify_cc26xx(self, pg: int, protocols: int) -> str:
         chips_dict = {
             CC26xx.PROTO_MASK_IEEE: "CC2630",
