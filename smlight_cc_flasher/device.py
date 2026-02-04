@@ -14,6 +14,31 @@ from .firmware import FirmwareFile
 _LOGGER = logging.getLogger(__name__)
 
 
+def parse_ieee_address(inaddr: str) -> int:
+    """Convert an entered IEEE address into an integer."""
+    try:
+        return int(inaddr, 16)
+    except ValueError:
+        pass
+
+    parts = []
+    if ":" in inaddr:
+        parts = inaddr.split(":")
+    elif "-" in inaddr:
+        parts = inaddr.split("-")
+
+    if len(parts) != 8:
+        raise ValueError("Supplied IEEE address is not valid")
+
+    addr = 0
+    for i, b in zip(range(8), parts):
+        try:
+            addr += int(b, 16) << (56 - (i * 8))
+        except ValueError:
+            raise ValueError("IEEE address contains invalid bytes")
+    return addr
+
+
 class Chip:
     def __init__(self, command_interface: CommandInterface, m33: bool = False) -> None:
         self.command_interface = command_interface

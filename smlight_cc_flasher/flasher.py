@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 from .command import Bootloader, CommandInterface
-from .device import CC26xx
+from .device import CC26xx, parse_ieee_address
 from .firmware import FirmwareFile
 
 LOG_LEVELS = [logging.INFO, logging.DEBUG]
@@ -22,6 +22,7 @@ class Flasher:
     firmware: FirmwareFile | None
     chip: CC26xx
     bootloader: Bootloader
+    ieee_address: str | None
 
     def __init__(
         self,
@@ -37,12 +38,14 @@ class Flasher:
         self.bsl2 = bsl2
         self.command_interface = CommandInterface()
         self.firmware = None
+        self.ieee_address = None
 
     async def async_init(
         self,
         file: str | None = None,
         buffer: bytes | None = None,
         bootloader_mode: str | None = None,
+        ieee_address: str | None = None,
     ) -> None:
         if file is not None and buffer is not None:
             raise ValueError("Cannot specify both file and buffer")
@@ -51,6 +54,7 @@ class Flasher:
         elif buffer is not None:
             self.firmware = FirmwareFile(buffer=buffer)
 
+        self.ieee_address = ieee_address
         self.chip = CC26xx(self.command_interface, self.firmware, self._m33)
         await self.command_interface.open(self._device, self._baudrate)
 
@@ -76,5 +80,10 @@ class Flasher:
         await self.chip.erase()
         await self.chip.flash(progress_callback=progress_callback)
         await self.chip.verify()
+
+        if self.ieee_address is not None:
+            ieee_int = parse_ieee_address(self.ieee_address)
+            await self.chip.set_ieee_address(ieee_int)
+
         await self.command_interface.cmdReset()
         await self.command_interface.close()
