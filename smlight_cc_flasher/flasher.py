@@ -82,8 +82,10 @@ class Flasher:
         await self.chip.verify()
 
         if self.ieee_address is not None:
-            ieee_int = parse_ieee_address(self.ieee_address)
-            await self.chip.set_ieee_address(ieee_int)
+            self.chip.ieee_address_secondary = parse_ieee_address(self.ieee_address)
+
+        if self.chip.ieee_address_secondary is not None:
+            await self.chip.set_ieee_address(self.chip.ieee_address_secondary)
 
         await self.command_interface.cmdReset()
         await self.command_interface.close()
