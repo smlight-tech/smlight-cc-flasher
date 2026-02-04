@@ -100,6 +100,7 @@ class CC26xx(Chip):
         m33: bool = False,
     ) -> None:
         super().__init__(command_interface, m33)
+        self.ieee_address_secondary: int | None = None
         if firmware:
             self._firmware = firmware
 
@@ -217,6 +218,7 @@ class CC26xx(Chip):
         ieee_addr_sec += ieee_addr_sec2[::-1]
 
         if ieee_addr_sec != b"\xff" * 8:
+            self.ieee_address_secondary = int.from_bytes(ieee_addr_sec, byteorder="big")
             _LOGGER.info(
                 "Secondary IEEE Address: %s",
                 ":".join(f"{x:02x}" for x in ieee_addr_sec),

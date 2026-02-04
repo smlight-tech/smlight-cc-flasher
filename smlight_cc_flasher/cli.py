@@ -273,11 +273,14 @@ async def main() -> None:
         await device.verify()
 
     if args.ieee_address:
-        ieee_addr = parse_ieee_address(args.ieee_address)
-        if await device.set_ieee_address(ieee_addr):
-            _LOGGER.info("Set address done")
+        device.ieee_address_secondary = parse_ieee_address(args.ieee_address)
+
+    if (args.write or args.ieee_address) and device.ieee_address_secondary:
+        if await device.set_ieee_address(device.ieee_address_secondary):
+            _LOGGER.info("IEEE address set successfully")
         else:
-            raise CliException("Set address failed")
+            raise CliException("IEEE address set failed")
+
     if args.disable_bootloader:
         device.disable_bootloader(args.force)
 
